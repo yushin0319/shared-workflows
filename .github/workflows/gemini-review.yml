@@ -8,15 +8,5 @@ on:
 jobs:
   review:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - run: echo "step 2 works"
-      - name: Test env
-        env:
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: echo "PR $PR_NUMBER"
+      - run: echo "no permissions block"
