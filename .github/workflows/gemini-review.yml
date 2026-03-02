@@ -80,6 +80,13 @@ jobs:
           - MAJOR: Logic errors, missing error handling, test gaps
           - MINOR: Style issues, naming, documentation
 
+          Error Concealment Check (flag as MAJOR):
+          - Empty or console-only catch blocks that swallow errors silently
+          - try-catch where finally/subsequent code runs regardless of failure (e.g., dialog closes on both success and error)
+          - Guard flags (if isLoading/isPreparing return) that mask why a function is called multiple times
+          - Default/fallback values that silently replace failed computations
+          - Workflow "continue on error" settings that bypass error notification pipelines
+
           If no issues found:
           ## Review Summary
           - Critical: 0
