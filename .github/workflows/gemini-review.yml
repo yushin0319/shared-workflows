@@ -28,7 +28,10 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          git diff -U10 "$BASE_SHA" "$HEAD_SHA" > /tmp/diff.txt
+          git diff -U10 "$BASE_SHA" "$HEAD_SHA" \
+            -- ':(exclude)package-lock.json' ':(exclude)yarn.lock' \
+               ':(exclude)pnpm-lock.yaml' ':(exclude)*.lock' \
+            > /tmp/diff.txt
 
           python - <<'PYEOF'
           import os, sys
