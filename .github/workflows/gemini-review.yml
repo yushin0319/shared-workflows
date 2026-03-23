@@ -18,7 +18,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install google-genai
+        run: pip install 'google-genai>=1.0,<2.0'
 
       - name: Run Gemini review
         env:
@@ -110,7 +110,7 @@ jobs:
               )
               review_text = response.text
           except Exception as e:
-              review_text = f"Gemini API error: {e}"
+              review_text = "Gemini API error: レビューを実行できませんでした。"
               print(f"Error calling Gemini API: {e}", file=sys.stderr)
 
           if truncated:
@@ -121,10 +121,10 @@ jobs:
           print(review_text)
           PYEOF
 
-          BODY=$(cat <<EOF
-          # Code Review by Gemini
-
-          $(cat /tmp/review.txt)
-          EOF
-          )
-          gh pr comment "$PR_NUMBER" --body "$BODY"
+          # ヘッダーを付与してコメント本文を作成
+          {
+            echo "# Code Review by Gemini"
+            echo ""
+            cat /tmp/review.txt
+          } > /tmp/comment.md
+          gh pr comment "$PR_NUMBER" --body-file /tmp/comment.md
