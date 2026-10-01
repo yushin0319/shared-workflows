@@ -10,6 +10,7 @@ permissions:
 
 jobs:
   review:
-    uses: yushin0319/shared-workflows/.github/workflows/gemini-review.yml@main
+    # このリポジトリ自身の PR は、PR 側の gemini-review.yml で動かす (変更をその PR で試せるように)
+    uses: ./.github/workflows/gemini-review.yml
     secrets:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}

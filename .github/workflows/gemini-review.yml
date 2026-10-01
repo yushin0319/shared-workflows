@@ -98,19 +98,44 @@ jobs:
 
           No issues found."""
 
-          try:
+          # 混雑 (503 など) は一時的なことが多いので、待って送り直す。
+          # それでも失敗したら「レビュー済み」に見えないようにして、ジョブも失敗にする
+          # (以前は失敗してもジョブが成功し、マージガードが指摘 0 件のレビューとして通していた)
+          import time
+          from google.genai import errors
+
+          RETRY_CODES = {429, 500, 502, 503, 504}
+          WAITS = [20, 40, 80]  # 秒。最大 3 回送り直す
+
+          def review():
               client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
-              response = client.models.generate_content(
-                  model="gemini-2.5-flash",
-                  contents=f"## PR Diff:\n```\n{diff}\n```\n\n{prompt}",
-                  config=types.GenerateContentConfig(
-                      system_instruction="You are a code review assistant reviewing pull request changes.",
-                      temperature=0.0,
-                  ),
-              )
-              review_text = response.text
+              for attempt in range(len(WAITS) + 1):
+                  try:
+                      response = client.models.generate_content(
+                          model="gemini-2.5-flash",
+                          contents=f"## PR Diff:\n```\n{diff}\n```\n\n{prompt}",
+                          config=types.GenerateContentConfig(
+                              system_instruction="You are a code review assistant reviewing pull request changes.",
+                              temperature=0.0,
+                          ),
+                      )
+                  except errors.APIError as e:
+                      if e.code in RETRY_CODES and attempt < len(WAITS):
+                          print(f"Gemini API {e.code}: {WAITS[attempt]} 秒待って送り直す ({attempt + 1}/{len(WAITS)})",
+                                file=sys.stderr, flush=True)
+                          time.sleep(WAITS[attempt])
+                          continue
+                      raise
+                  if not response.text:
+                      raise RuntimeError("Gemini の返事が空でした")
+                  return response.text
+
+          failed = False
+          try:
+              review_text = review()
           except Exception as e:
-              review_text = "Gemini API error: レビューを実行できませんでした。"
+              failed = True
+              review_text = f"Gemini API でレビューを実行できませんでした。再実行してください。\n\n```\n{e}\n```"
               print(f"Error calling Gemini API: {e}", file=sys.stderr)
 
           if truncated:
@@ -118,13 +143,25 @@ jobs:
 
           with open("/tmp/review.txt", "w") as f:
               f.write(review_text)
+          if failed:
+              open("/tmp/review_failed", "w").close()
           print(review_text)
           PYEOF
 
-          # ヘッダーを付与してコメント本文を作成
+          # ヘッダーを付与してコメント本文を作成。失敗したときは別の見出しにして、
+          # マージガード (「Code Review by Gemini」を探す) にレビュー済みと読まれないようにする
+          if [ -f /tmp/review_failed ]; then
+            header="# Gemini Review Failed"
+          else
+            header="# Code Review by Gemini"
+          fi
           {
-            echo "# Code Review by Gemini"
+            echo "$header"
             echo ""
             cat /tmp/review.txt
           } > /tmp/comment.md
           gh pr comment "$PR_NUMBER" --body-file /tmp/comment.md
+          if [ -f /tmp/review_failed ]; then
+            echo "::error::Gemini レビューを実行できませんでした"
+            exit 1
+          fi
